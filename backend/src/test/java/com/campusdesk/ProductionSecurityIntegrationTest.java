@@ -9,11 +9,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.web.FilterChainProxy;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.method.HandlerMethod;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -23,6 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("prod")
+@ExtendWith(OutputCaptureExtension.class)
 class ProductionSecurityIntegrationTest {
     private static final String DB_NAME = "campusdesk-production-security-test";
 
@@ -91,5 +95,53 @@ class ProductionSecurityIntegrationTest {
         assertThat(servletContext.getFilterRegistrations().values())
             .extracting(FilterRegistration::getClassName)
             .doesNotContain(JwtAuthenticationFilter.class.getName());
+    }
+
+    @Test
+    void authDiagnosticsIdentifyServiceAndSecurity401ResponsesWithoutSensitiveData(CapturedOutput output)
+        throws Exception {
+        String username = "diagnostic-" + java.util.UUID.randomUUID();
+        String email = username + "@example.invalid";
+        String password = "test-only-diagnostic-password";
+        String registration = "{\"username\":\"" + username + "\",\"email\":\"" + email
+            + "\",\"fullName\":\"Diagnostic Test User\",\"password\":\"" + password + "\"}";
+
+        mockMvc.perform(post("/api/auth/register")
+                .contentType("application/json")
+                .content(registration))
+            .andExpect(status().isOk());
+        mockMvc.perform(post("/api/auth/login")
+                .contentType("application/json")
+                .content("{\"username\":\"" + username + "\",\"password\":\"" + password + "\"}"))
+            .andExpect(status().isOk());
+        mockMvc.perform(post("/api/auth/login")
+                .contentType("application/json")
+                .content("{\"username\":\"" + username + "\",\"password\":\"incorrect-test-password\"}"))
+            .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/auth/register")
+                .contentType("application/json")
+                .content(registration))
+            .andExpect(status().isConflict());
+        mockMvc.perform(get("/api/tickets/my"))
+            .andExpect(status().isUnauthorized());
+
+        assertThat(hasDiagnosticLine(output, "AuthRequestBoundaryFilter",
+            "method=POST path=/api/auth/register status=200 authorization_present=false")).isTrue();
+        assertThat(hasDiagnosticLine(output, "SecurityChainDiagnosticFilter",
+            "method=POST path=/api/auth/login status=200 authorization_present=false")).isTrue();
+        assertThat(hasDiagnosticLine(output, "AuthControllerDiagnosticInterceptor",
+            "method=POST path=/api/auth/login status=401 authorization_present=false")).isTrue();
+        assertThat(hasDiagnosticLine(output, "AuthService",
+            "method=POST path=/api/auth/login status=401 authorization_present=false")).isTrue();
+        assertThat(hasDiagnosticLine(output, "AuthService",
+            "method=POST path=/api/auth/register status=409 authorization_present=false")).isTrue();
+        assertThat(hasDiagnosticLine(output, "SecurityConfig",
+            "method=GET path=/api/tickets/my status=401 authorization_present=false")).isTrue();
+        assertThat(output.getOut()).doesNotContain(username, email, password, "incorrect-test-password");
+    }
+
+    private static boolean hasDiagnosticLine(CapturedOutput output, String loggerName, String fields) {
+        return output.getOut().lines()
+            .anyMatch(line -> line.contains(loggerName) && line.contains(fields));
     }
 }

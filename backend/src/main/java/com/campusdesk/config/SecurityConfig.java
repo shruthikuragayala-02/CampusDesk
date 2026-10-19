@@ -1,12 +1,19 @@
 package com.campusdesk.config;
 
+import com.campusdesk.controller.AuthControllerDiagnosticInterceptor;
+import com.campusdesk.security.AuthRequestBoundaryFilter;
+import com.campusdesk.security.AuthRequestDiagnostics;
 import com.campusdesk.security.JwtAuthenticationFilter;
+import com.campusdesk.security.SecurityChainDiagnosticFilter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpStatus;
+import org.springframework.core.Ordered;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
@@ -19,12 +26,14 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.Arrays;
 import java.util.List;
@@ -33,6 +42,8 @@ import java.util.List;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
+    private static final Logger LOGGER = LoggerFactory.getLogger(SecurityConfig.class);
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final UserDetailsService userDetailsService;
 
@@ -51,7 +62,7 @@ public class SecurityConfig {
             .cors(Customizer.withDefaults())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .exceptionHandling(exceptions -> exceptions
-                .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+                .authenticationEntryPoint(authenticationEntryPoint()))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                 .requestMatchers("/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/actuator/health").permitAll()
@@ -62,8 +73,30 @@ public class SecurityConfig {
                 .anyRequest().authenticated())
             .authenticationProvider(authenticationProvider())
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(new SecurityChainDiagnosticFilter(), JwtAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    @Bean
+    public AuthenticationEntryPoint authenticationEntryPoint() {
+        return (request, response, exception) -> {
+            AuthRequestDiagnostics.log(LOGGER, request, HttpStatus.UNAUTHORIZED.value());
+            response.setStatus(HttpStatus.UNAUTHORIZED.value());
+        };
+    }
+
+    @Bean
+    public AuthRequestBoundaryFilter authRequestBoundaryFilter() {
+        return new AuthRequestBoundaryFilter();
+    }
+
+    @Bean
+    public FilterRegistrationBean<AuthRequestBoundaryFilter> authRequestBoundaryFilterRegistration(
+        AuthRequestBoundaryFilter filter) {
+        FilterRegistrationBean<AuthRequestBoundaryFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 20);
+        return registration;
     }
 
     @Bean
@@ -72,6 +105,17 @@ public class SecurityConfig {
             new FilterRegistrationBean<>(jwtAuthenticationFilter);
         registration.setEnabled(false);
         return registration;
+    }
+
+    @Bean
+    public WebMvcConfigurer authControllerDiagnosticInterceptorConfigurer() {
+        return new WebMvcConfigurer() {
+            @Override
+            public void addInterceptors(InterceptorRegistry registry) {
+                registry.addInterceptor(new AuthControllerDiagnosticInterceptor())
+                    .addPathPatterns("/api/auth/**");
+            }
+        };
     }
 
     @Bean

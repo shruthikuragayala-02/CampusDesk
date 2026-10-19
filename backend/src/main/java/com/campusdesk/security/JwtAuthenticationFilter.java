@@ -4,6 +4,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -17,6 +19,8 @@ import java.util.Optional;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+    private static final Logger LOGGER = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+
     private final JwtTokenService jwtTokenService;
     private final CustomUserDetailsService userDetailsService;
 
@@ -39,6 +43,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 try {
                     userDetails = userDetailsService.loadUserByUsername(username.get());
                 } catch (UsernameNotFoundException ex) {
+                    AuthRequestDiagnostics.log(LOGGER, request, HttpServletResponse.SC_UNAUTHORIZED);
                     response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
                     return;
                 }
