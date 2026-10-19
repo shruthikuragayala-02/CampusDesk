@@ -9,9 +9,10 @@ export type Credentials = {
   fullName?: string;
 };
 
-export default function AuthPage({ busy, error, onAuthenticate }: {
+export default function AuthPage({ busy, error, message, onAuthenticate }: {
   busy: boolean;
   error: string;
+  message: string;
   onAuthenticate: (credentials: Credentials) => void;
 }) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -68,6 +69,7 @@ export default function AuthPage({ busy, error, onAuthenticate }: {
               </span>
               {mode === 'register' && <small className="field-hint">Use at least 6 characters.</small>}
             </label>
+            {message && <div className="auth-success" role="status">{message}</div>}
             {error && <div className="auth-error" role="alert"><Icon name="alert" />{error}</div>}
             <button className="button-primary auth-submit" disabled={busy}>{busy ? <><span className="spinner" />Please wait…</> : <>{mode === 'login' ? 'Sign in' : 'Create account'}<Icon name="arrow" /></>}</button>
           </form>

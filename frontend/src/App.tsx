@@ -331,7 +331,7 @@ function App() {
   }
 
   if (!token) {
-    return <AuthPage busy={busy} error={error} onAuthenticate={authenticate} />;
+    return <AuthPage busy={busy} error={error} message={message} onAuthenticate={authenticate} />;
   }
 
   const heading = view === 'settings' ? 'Workspace settings' : view === 'tickets' ? 'Ticket queue' : isStaff ? 'Operations overview' : 'Your campus, in order';
@@ -424,7 +424,7 @@ function App() {
                 </select>
               </label>
             </div>
-            <div className="queue-summary"><span>{ticketSearch ? `Results for “${ticketSearch}”` : 'Most recently updated requests'}</span><span>{visibleTickets.length} loaded</span></div>
+            <div className="queue-summary"><span>{ticketSearch ? `Results for “${ticketSearch}”` : 'Newest requests first'}</span><span>{visibleTickets.length} loaded</span></div>
             <div className="ticket-stack queue-stack">
               {visibleTickets.map((ticket) => (
                 <TicketCard key={ticket.id} ticket={ticket} canManage={isStaff} staff={staff} busy={busy}
@@ -507,7 +507,7 @@ function DashboardOverview({ dashboard, onOpenTickets }: { dashboard: Dashboard 
             {priorityEntries.length ? priorityEntries.map(([label, count]) => <div className="bar-row" key={label}><span>{label.toLowerCase()}</span><div className="bar-track"><span className={`bar-fill priority-${label.toLowerCase()}`} style={{ width: `${count / maxPriority * 100}%` }} /></div><strong>{count}</strong></div>) : <p className="muted">Priority data will appear as tickets are submitted.</p>}
           </div>
           {categoryEntries.length > 0 && <div className="category-breakdown"><span className="section-kicker">BY CATEGORY</span>{categoryEntries.slice(0, 4).map(([label, count]) => <div className="bar-row" key={label}><span title={label}>{label}</span><div className="bar-track"><span className="bar-fill category-fill" style={{ width: `${count / maxCategory * 100}%` }} /></div><strong>{count}</strong></div>)}</div>}
-          <div className="avg-resolution"><span>Average resolution</span><strong>{dashboard ? `${dashboard.averageResolutionHours.toFixed(1)}h` : '—'}</strong></div>
+          <div className="avg-resolution"><span>Average resolution</span><strong>{dashboard && dashboard.resolvedTickets > 0 ? `${dashboard.averageResolutionHours.toFixed(1)}h` : '—'}</strong></div>
         </div>
       </section>
     </>

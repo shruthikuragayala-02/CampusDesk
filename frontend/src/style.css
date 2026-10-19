@@ -296,6 +296,7 @@ svg { width: 18px; height: 18px; flex: 0 0 auto; }
 .password-wrap input { padding-right: 55px; }
 .password-toggle { position: absolute; inset: 0 8px 0 auto; border: 0; color: #566dc8; background: transparent; font-size: 9px; font-weight: 600; cursor: pointer; }
 .field-hint { color: #8c96a6; font-size: 9px; font-weight: 400; }
+.auth-success { padding: 9px 10px; border: 1px solid #d2e8dc; border-radius: 7px; color: #327454; background: #f2fbf5; font-size: 10px; line-height: 1.5; }
 .auth-error { display: flex; align-items: flex-start; gap: 7px; padding: 9px 10px; border: 1px solid #efd1d4; border-radius: 7px; color: #a13d49; background: #fff6f6; font-size: 10px; line-height: 1.5; }
 .auth-error svg { width: 14px; height: 14px; flex: 0 0 auto; }
 .auth-submit { justify-content: space-between; min-height: 41px; margin-top: 2px; }
