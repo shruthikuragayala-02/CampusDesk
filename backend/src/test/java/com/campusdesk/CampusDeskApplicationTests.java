@@ -118,6 +118,74 @@ class CampusDeskApplicationTests {
     }
 
     @Test
+    void unauthenticatedRegistrationIsPublicButValidationAndOtherRoutesRemainProtected() throws Exception {
+        String username = "public-register-" + UUID.randomUUID();
+        String email = username + "@campusdesk.local";
+        String validRequest = "{\"username\":\"" + username + "\",\"email\":\"" + email
+            + "\",\"fullName\":\"Public Registration Test\",\"password\":\"Password@123\"}";
+
+        String response = mockMvc.perform(post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validRequest))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+        assertThat(JsonPath.<String>read(response, "$.token")).isNotBlank();
+        assertThat(JsonPath.<String>read(response, "$.role")).isEqualTo("STUDENT");
+        assertThat(userRepository.findByUsername(username)).isPresent();
+        assertThat(userRepository.findByEmail(email).orElseThrow().getRole()).isEqualTo(Role.STUDENT);
+    }
+
+    @Test
+    void registrationValidationRunsBeforeAuthorizationAndPrivateEndpointsRemainProtected() throws Exception {
+        String invalidUsername = "invalid-register-" + UUID.randomUUID();
+        mockMvc.perform(post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"" + invalidUsername
+                    + "\",\"email\":\"not-an-email\",\"fullName\":\" \",\"password\":\"short\"}"))
+            .andExpect(status().isBadRequest());
+        assertThat(userRepository.findByUsername(invalidUsername)).isEmpty();
+
+        mockMvc.perform(get("/api/auth/register"))
+            .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/admin/categories")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Unauthenticated category\"}"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void registrationAllowsEmailShapedUsernameAndRejectsDuplicateUsernameOrEmail() throws Exception {
+        String unique = UUID.randomUUID().toString();
+        String emailShapedUsername = "campus-" + unique + "@example.invalid";
+        String password = "test-only-password";
+
+        mockMvc.perform(post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"" + emailShapedUsername + "\",\"email\":\""
+                    + emailShapedUsername + "\",\"fullName\":\"Email Username Test\","
+                    + "\"password\":\"" + password + "\"}"))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"" + emailShapedUsername
+                    + "\",\"email\":\"different-" + unique
+                    + "@example.invalid\",\"fullName\":\"Duplicate Username Test\","
+                    + "\"password\":\"" + password + "\"}"))
+            .andExpect(status().isConflict());
+
+        mockMvc.perform(post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"different-" + unique + "\",\"email\":\""
+                    + emailShapedUsername + "\",\"fullName\":\"Duplicate Email Test\","
+                    + "\"password\":\"" + password + "\"}"))
+            .andExpect(status().isConflict());
+    }
+
+    @Test
     void invalidLoginAndAdminInputReturnSafeClientErrors() throws Exception {
         String invalidLogin = mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
